@@ -13,13 +13,16 @@ enum {
     TH_ERR_BAD_VALUE  = -3,  // 값 무결성 실패(범위 밖/쓰레기값)
 };
 
+
 // 수집된 데이터를 담는 표준 구조체
 typedef struct {
     float temperature;
     float humidity;
     int error_code;
-    int sys_errno;   // 시스템 errno(실패 시 디버깅용), 0은 정상
+    int sys_errno;   // 시스템 errno(실패 시 디버깅용), 0은 정상 
+    //TODO errorno가 꼭 필요한지 검토해야할 듯 error code와의 차이점?
 } THData;
+
 
 // th_sensor 내부 함수
 int th_init(const char* ip, int port); // 초기화 및 네트워크 연결(0은 성공, -1은 실패)
