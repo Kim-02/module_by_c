@@ -3,6 +3,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <fcntl.h>
 
 #include "common.h"
 #include "th_module.h"
@@ -14,6 +15,7 @@ int main(void) {
         return 1;
     }
 
+    // 이거 큐가 존재해야 성공함 아니면 자동으로 꺼질거야
     mqd_t mq = mq_open(TH_QUEUE_NAME, O_WRONLY);
     if (mq == (mqd_t)-1) {
         perror("MQ 열기 실패");
@@ -21,7 +23,7 @@ int main(void) {
     }
 
     while (1) {
-        THModuleData d = th_module_read_once();
+        THData d = th_module_read_once();
 
         THMsg msg;
         msg.temperature = d.temperature;
@@ -31,13 +33,17 @@ int main(void) {
 
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
-        msg.ts_ms = (uint64_t)ts.tv_sec * 1000 +
-                    ts.tv_nsec / 1000000;
+        msg.ts_ms = (uint64_t)ts.tv_sec * 1000ULL +
+                    (uint64_t)(ts.tv_nsec / 1000000ULL);
 
-        mq_send(mq, (char*)&msg, sizeof(msg), 0);
+        if (mq_send(mq, (char*)&msg, sizeof(msg), 0) == -1) {
+            perror("mq_send 실패");
+        }
 
         sleep(5);
     }
 
+    mq_close(mq);
+    th_module_close();
     return 0;
 }
