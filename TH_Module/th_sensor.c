@@ -4,8 +4,15 @@
 #include <errno.h>
 #include <stdint.h>
 #include <sys/time.h>
+#include <mqueue.h>
+#include <time.h>
+#include <unistd.h>
 
+#include "common.h"
 #include "th_sensor.h"
+
+// 전역 변수로 메시지큐 핸들러 관리
+static mqd_t g_mq = (mqd_t)-1;
 
 // ================================
 // 내부 상태(전역)
@@ -17,6 +24,7 @@ static int  g_port = 0;
 
 // 센서/네트워크 환경에 맞게 조절 가능
 static const int   SLAVE_ID = 1; //TODO 이 부분은 BT-NB114의 온습도계 번호와 맞아야 함 확인 필요
+// 그 BT-NB114 보면 버튼 있는데 그거 8번 버튼 켜져 있으면 1번 맞을거야, 내가 8번 켜두고 써서 아마 안바꿨으면 1 맞아
 static const int   REG_ADDR = 0;
 static const int   REG_CNT  = 2;
 
@@ -130,6 +138,7 @@ THData th_read_once(void) {
     if (!ctx) {
         data.error_code = TH_ERR_NOT_INIT;
         data.sys_errno = 0; // TODO 이 부분 왜 0인지? 설계대로라면 에러 코드마다 넘버가 따로 있는게 좋을듯
+        // ㄴㄴ 이거 0이 통신 성공이라 오류면 에러코드 errno 출력함
         return data;
     }
 
@@ -140,6 +149,7 @@ THData th_read_once(void) {
 
     // 2) 실패하면 soft reconnect 1회 + 재시도
     //TODO 복구 로직이 꼭 필요한지? 무결성 검증 후에 다시 반복을 한다던지 시간을 측정해봐야할 듯
+    // 이거 우리 랩실은 문제될거 없어보이는데 좀 더 큰 환경(작업장)에서 통신 장애나 변수에 도움되라고 넣어둔거 지금 당장 테스트엔 필요없음 복구 로직
     if (rc != REG_CNT) {
         data.sys_errno = errno;
 
@@ -169,15 +179,26 @@ THData th_read_once(void) {
     float t = reg[0] / 10.0f;
     float h = reg[1] / 10.0f;
 
-    // 6) 무결성 체크
+    // 7) 무결성 체크 및 일시적 노이즈 재시도
     if (!validate_range(t, h)) {
-        data.error_code = TH_ERR_BAD_VALUE;
-        data.temperature = t;
-        data.humidity = h;
-        data.sys_errno = 0;  // 이건 통신 실패가 아니라 값 이상이므로 errno 의미 없음
-        return data;
+        // 일시적인 튐 현상일 수 있으므로 0.05초 대기 후 딱 한 번만 더 읽어봄
+        usleep(50000); 
+        if (modbus_read_input_registers(ctx, REG_ADDR, REG_CNT, reg) == REG_CNT) {
+            t = reg[0] / 10.0f;
+            h = reg[1] / 10.0f;
+        }
+
+        // 재시도 후에도 범위를 벗어나면 최종 에러 처리
+        if (!validate_range(t, h)) {
+            data.error_code = TH_ERR_BAD_VALUE;
+            data.temperature = t;
+            data.humidity = h;
+            data.sys_errno = 0; // 통신 자체는 성공했으므로 OS 에러는 없음
+            return data;
+        }
     }
 
+    // 모든 검증 통과 시 데이터 확정
     data.temperature = t;
     data.humidity = h;
     data.error_code = TH_OK;
@@ -191,6 +212,60 @@ void th_close(void) { //TODO 이 부분 MQ를 정리하는 코드 추가 필요
         modbus_free(ctx);
         ctx = NULL;
     }
+
+    // 메시지큐 핸들러 닫기
+    if (g_mq != (mqd_t)-1) {
+        mq_close(g_mq);
+        g_mq = (mqd_t)-1;
+    }
 }
+
+// 실행부
+int main(void) {
+    // 1. 센서 초기화 (IP와 포트는 환경에 맞게 설정)
+    if (th_init("192.168.0.20", 8887) != 0) {
+        fprintf(stderr, "센서 초기화 실패\n");
+        return 1;
+    }
+
+    // 2. MQ 열기 (쓰기 전용)
+    // 허브가 이미 큐 생성했다고 가정
+    g_mq = mq_open(TH_QUEUE_NAME, O_WRONLY);
+    if (g_mq == (mqd_t)-1) {
+        perror("메시지큐 열기 실패 (Hub가 실행 중인지 확인)");
+        th_close();
+        return 1;
+    }
+
+    printf("🚀 온습도 수집 모듈 가동 (전송 주기: 5초)\n");
+
+    while (1) {
+        // 데이터 한 번 읽기
+        THData data = th_read_once();
+
+        // MQ 전송용 구조체에 데이터 복사
+        THMsg msg;
+        msg.temperature = data.temperature;
+        msg.humidity = data.humidity;
+        msg.error_code = data.error_code;
+        msg.sys_errno = data.sys_errno;
+        msg.ts_ms = (uint64_t)time(NULL) * 1000;
+
+        // 3. MQ로 전송
+        if (mq_send(g_mq, (const char*)&msg, sizeof(msg), 0) == -1) {
+            perror("MQ 전송 실패");
+        } else {
+            if (data.error_code == 0) {
+                printf("[SENT] %.1f°C / %.1f%%\n", msg.temperature, msg.humidity);
+            }
+        }
+
+        sleep(5); // 5초 대기
+    }
+
+    th_close();
+    return 0;
+}
+
 
 //TODO 구현한 함수들이 정상적으로 동작해서 MQ로 전송할 수 있도록 실행부 추가 필요 
