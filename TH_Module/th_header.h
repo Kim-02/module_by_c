@@ -21,6 +21,7 @@ typedef struct {
     int error_code;
     int sys_errno;   // 시스템 errno(실패 시 디버깅용), 0은 정상 
     //TODO errorno가 꼭 필요한지 검토해야할 듯 error code와의 차이점?
+    // 굳이 필요한건 아니고 오류 발생했을 때 에러코드는 위에 정의한 enum 내부에서 출력되는거고 errno는 리눅스 표준 오류 코드라 그냥 어떤 오류인지 정확히 구분하기 위한? 그래서 없어도 됨
 } THData;
 
 
