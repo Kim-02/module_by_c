@@ -1,0 +1,3 @@
+test stub은 어떤 방식으로 모듈에서 MQ를 보낼 지 결정 후에 작성
+구조체로 내보낼 것인지 fifo를 직접 읽어서 string 형태로 보낼 것인지
+예시로 Watch Module은 THdata라는 구조체를 보내고 있음.

@@ -25,7 +25,7 @@ typedef struct {
 static int ensure_fifo(const char* path) {
     struct stat st;
     if (stat(path, &st) == 0) {
-        if (!S_ISFIFO(st.st_mode)) {
+        if (!S_ISFIFO(st.st_mode)) { //TODO 에러 처리 부분에서 파일을 지우고 fifo로 바꾼다던지 추가 처리가 필요할 듯
             fprintf(stderr, "❌ %s exists but not FIFO\n", path);
             return -1;
         }
@@ -102,11 +102,12 @@ static void fifo_write_line(FILE* fifo, const DeviceCache* dc) {
 int watch_udp_run(const WatchUdpConfig* cfg) {
     if (!cfg || !cfg->fifo_path || !cfg->bind_ip) return -1;
 
-    const int port = (cfg->port > 0 ? cfg->port : 5005);
+    const int port = (cfg->port > 0 ? cfg->port : 5005); // TODO 5005 포트가 고정된다면 굳이 포트를 바꾸지 말고 하드코딩으로 넣어도 될듯
     const int max_dev = (cfg->max_devices > 0 ? cfg->max_devices : 64);
 
     // 1) FIFO 준비
-    if (ensure_fifo(cfg->fifo_path) != 0) return -2;
+    //TODO 각 분기마다 에러처리 후 return하는 음수가 다른데 무슨 의미가 있는지?
+    if (ensure_fifo(cfg->fifo_path) != 0) return -2; //TODO 이 부분도 굳이 경로가 바뀔 필요가 없다면 하드코딩
 
     FILE* fifo = fopen(cfg->fifo_path, "a");
     if (!fifo) { perror("fopen FIFO"); return -3; }
@@ -144,6 +145,7 @@ int watch_udp_run(const WatchUdpConfig* cfg) {
 
     unsigned char buf[4096];
 
+    //TODO 이 부분 이렇게 구현해도 병목이 일어나지 않는지 조사 필요할 듯
     while (1) {
         struct sockaddr_in from;
         socklen_t fromlen = sizeof(from);
@@ -156,7 +158,7 @@ int watch_udp_run(const WatchUdpConfig* cfg) {
         }
 
         cJSON* root = cJSON_Parse((const char*)buf);
-        if (!root) continue;
+        if (!root) continue; //TODO 이 부분 에러처리가 왜 없는지?
 
         char deviceId[DEV_ID_LEN] = "unknown";
         char type[32] = "";
@@ -169,7 +171,7 @@ int watch_udp_run(const WatchUdpConfig* cfg) {
         double value = 0.0;
         int has_value = json_get_number(root, "value", &value);
 
-        int slot = find_or_create_slot(cache, max_dev, deviceId);
+        int slot = find_or_create_slot(cache, max_dev, deviceId); //TODO 이 부분이 시간을 많이 잡아먹을 것으로 보임
         if (slot >= 0) {
             DeviceCache* dc = &cache[slot];
 
@@ -185,11 +187,13 @@ int watch_udp_run(const WatchUdpConfig* cfg) {
             }
 
             // ✅ 매 패킷마다 “현재 캐시 상태”를 FIFO로 출력
+            //TODO FIFO에 작성한 걸 MQ로 보내는 코드 추가해야할듯
+            //MQ에 보낼 때 어떻게 device를 구분할 건지도 고민해봐야할 문제
             fifo_write_line(fifo, dc);
         }
 
         cJSON_Delete(root);
-    }
+    } //TODO 루프가 끝나고(종료) 어떻게 파일을 정리할 지 코드 추가 필요 
 
     // (실제로는 여기 도달 안 함)
     free(cache);
