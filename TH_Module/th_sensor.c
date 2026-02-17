@@ -16,7 +16,7 @@ static char g_ip[64] = {0};
 static int  g_port = 0;
 
 // 센서/네트워크 환경에 맞게 조절 가능
-static const int   SLAVE_ID = 1;
+static const int   SLAVE_ID = 1; //TODO 이 부분은 BT-NB114의 온습도계 번호와 맞아야 함 확인 필요
 static const int   REG_ADDR = 0;
 static const int   REG_CNT  = 2;
 
@@ -40,7 +40,7 @@ static int validate_range(float t, float h) {
     return 1;
 }
 
-static void apply_common_options(modbus_t *c) {
+static void apply_common_options(modbus_t *c) { 
     // Slave ID 설정
     modbus_set_slave(c, SLAVE_ID);
 
@@ -56,7 +56,7 @@ static int soft_reconnect(void) {
     if (!ctx) return -1;
 
     // 기존 연결 닫고 다시 연결
-    modbus_close(ctx);
+    modbus_close(ctx); 
     if (modbus_connect(ctx) == -1) {
         return -1;
     }
@@ -120,7 +120,7 @@ int th_init(const char* ip, int port) {
     return 0;
 }
 
-THData th_read_once(void) {
+THData th_read_once(void) { 
     THData data;
     data.temperature = 0.0f;
     data.humidity = 0.0f;
@@ -129,7 +129,7 @@ THData th_read_once(void) {
 
     if (!ctx) {
         data.error_code = TH_ERR_NOT_INIT;
-        data.sys_errno = 0;
+        data.sys_errno = 0; // TODO 이 부분 왜 0인지? 설계대로라면 에러 코드마다 넘버가 따로 있는게 좋을듯
         return data;
     }
 
@@ -139,6 +139,7 @@ THData th_read_once(void) {
     int rc = modbus_read_input_registers(ctx, REG_ADDR, REG_CNT, reg);
 
     // 2) 실패하면 soft reconnect 1회 + 재시도
+    //TODO 복구 로직이 꼭 필요한지? 무결성 검증 후에 다시 반복을 한다던지 시간을 측정해봐야할 듯
     if (rc != REG_CNT) {
         data.sys_errno = errno;
 
@@ -184,10 +185,12 @@ THData th_read_once(void) {
     return data;
 }
 
-void th_close(void) {
+void th_close(void) { //TODO 이 부분 MQ를 정리하는 코드 추가 필요
     if (ctx) {
         modbus_close(ctx);
         modbus_free(ctx);
         ctx = NULL;
     }
 }
+
+//TODO 구현한 함수들이 정상적으로 동작해서 MQ로 전송할 수 있도록 실행부 추가 필요 
