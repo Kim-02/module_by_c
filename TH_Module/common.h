@@ -9,5 +9,5 @@ typedef struct {
   float humidity;
   int error_code;
   int sys_errno;
-  unit64_t ts_ms; // ts
+  uint64_t ts_ms; // ts
 } THMsg;
