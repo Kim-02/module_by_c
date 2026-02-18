@@ -2,7 +2,7 @@
 #include <stdint.h>
 
 #define TH_QUEUE_NAME "/mq_th"
-#define WQTCH_QUEUE_NAME "/mq_vital"
+#define WATCH_QUEUE_NAME "/mq_vital"
 
 // 온습도
 typedef struct {
