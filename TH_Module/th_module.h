@@ -1,5 +1,9 @@
 #ifndef TH_MODULE_H
 #define TH_MODULE_H
+#define TH_OK               TH_MODULE_OK
+#define TH_ERR_NOT_INIT     TH_MODULE_ERR_NOT_INIT
+#define TH_ERR_READ_FAIL    TH_MODULE_ERR_READ_FAIL
+#define TH_ERR_BAD_VALUE    TH_MODULE_ERR_BAD_VALUE
 
 #ifdef __cplusplus
 extern "C" {
