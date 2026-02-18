@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <mqueue.h>  // mq_ 관련 함수를 위해 필수
 #include <string.h>
+#include <time.h>
 #include "common.h"
 
 int main(void) {
@@ -49,9 +50,15 @@ int main(void) {
         THMsg msg;
         memcpy(&msg, buf, sizeof(msg));
 
-        printf("[RECV] prio=%u | t=%.1f h=%.1f err=%d errno=%d ts=%llu\n",
+        // 시간 형식 yy-MM-dd HH:mm:ss 형식 맞췄음 (워치에서 이렇게 보냄 TS)
+        time_t raw_time = (time_t)(msg.ts_ms / 1000);
+        struct tm *lt = localtime(&raw_time);
+        char formatted_time[20];
+        strftime(formatted_time, sizeof(formatted_time), "%y-%m-%d %H:%M:%S", lt);
+
+        printf("[RECV] prio=%u | t=%.1f h=%.1f err=%d errno=%d | 시간:%s \n",
                 prio, msg.temperature, msg.humidity, msg.error_code, msg.sys_errno,
-                (unsigned long long)msg.ts_ms);
+                formatted_time);
     }
 
     mq_close(q);
