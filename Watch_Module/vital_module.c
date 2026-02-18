@@ -24,7 +24,7 @@ static mqd_t g_watch_mq = (mqd_t)-1;
 typedef struct {
     int used;
     char deviceId[DEV_ID_LEN];
-    char last_ts[TS_LEN]
+    char last_ts[TS_LEN];
     double heartRate;
     double skin_temperature;
     int has_hr;
