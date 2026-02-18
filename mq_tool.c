@@ -1,3 +1,15 @@
+/*
+빌드
+gcc -o mq_tool mq_tool.c -I../include -lrt
+
+테스트 시작 전에 큐 생성
+./mq_tool init
+
+테스트 끝나고 큐 삭제
+./mq_tool clean
+*/
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
